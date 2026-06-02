@@ -9,3 +9,5 @@ pandas>=2.0
 tqdm>=4.65
 jupyter>=1.0
 shap>=0.43
+torch>=2.0
+optuna>=3.5
