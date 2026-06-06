@@ -2,3 +2,5 @@ data/*
 !data/.gitkeep
 preprocessed/*
 !preprocessed/.gitkeep
+__pycache__/
+*.pyc

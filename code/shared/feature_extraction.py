@@ -197,7 +197,17 @@ def build_pca_features(spectrograms, n_components=64, pca=None):
     pca : fitted PCA object  (pass back in for test-set transforms)
     """
     N = len(spectrograms)
-    X_flat = spectrograms.reshape(N, -1).astype(np.float32)
+    # Handle ragged object arrays by truncating/padding to fixed size
+    if spectrograms.dtype == object:
+        TARGET_ROWS, TARGET_COLS = 800, 500
+        fixed = np.zeros((N, TARGET_ROWS, TARGET_COLS), dtype=np.float32)
+        for i, s in enumerate(spectrograms):
+            r = min(s.shape[0], TARGET_ROWS)
+            c = min(s.shape[1], TARGET_COLS)
+            fixed[i, :r, :c] = s[:r, :c]
+        X_flat = fixed.reshape(N, -1)
+    else:
+        X_flat = spectrograms.reshape(N, -1).astype(np.float32)
 
     if pca is None:
         print(f"Fitting PCA ({n_components} components) on {N} samples …")
