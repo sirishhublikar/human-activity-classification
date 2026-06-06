@@ -54,7 +54,7 @@ from signal_processing import compute_spectrogram
 
 # ── Worker function (runs in separate process) ────────────────────────────
 
-def _process_file(filepath, apply_threshold=False):
+def _process_file(filepath):
     """
     Load one .dat file, run the full signal processing pipeline.
     Returns (spec float32, t_axis float64, label, person, repetition, filepath_str)
@@ -68,7 +68,7 @@ def _process_file(filepath, apply_threshold=False):
     meta  = parse_filename(fp.name)
     radar = load_dat_file(fp)
 
-    spec, _, t_axis = compute_spectrogram(radar, apply_threshold=apply_threshold)
+    spec, _, t_axis = compute_spectrogram(radar)
 
     return (spec.astype(np.float32),
             t_axis.astype(np.float64),
@@ -81,7 +81,7 @@ def _process_file(filepath, apply_threshold=False):
 # ── Main ──────────────────────────────────────────────────────────────────
 
 def main(data_dir='../../data', out_dir='../../preprocessed',
-         n_workers=None, apply_threshold=False, verbose=True):
+         n_workers=None, verbose=True):
 
     out_dir  = Path(out_dir)
     data_dir = Path(data_dir)
@@ -106,7 +106,7 @@ def main(data_dir='../../data', out_dir='../../preprocessed',
     t0 = time.time()
 
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        worker = partial(_process_file, apply_threshold=apply_threshold)
+        worker = partial(_process_file)
         futures = {pool.submit(worker, str(fp)): fp for fp in dat_files}
 
         for future in as_completed(futures):
@@ -185,7 +185,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_dir',  default='../../preprocessed')
     parser.add_argument('--workers',  type=int, default=None,
                         help='Number of CPU cores (default: all)')
-    parser.add_argument('--threshold', action='store_true',
-                    help='Apply Otsu noise floor suppression (default: off)')
+
     args = parser.parse_args()
-    main(args.data_dir, args.out_dir, args.workers, args.threshold)
+    main(args.data_dir, args.out_dir, args.workers)
