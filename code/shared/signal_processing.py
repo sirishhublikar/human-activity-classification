@@ -12,6 +12,7 @@ Mirrors DataProcessingExample.m step-by-step:
   5.  High-pass Butterworth MTI filter  (order 4, Wn = 0.0075)
       — removes static clutter (walls, furniture)
   6.  STFT summed over range bins 10-30  -> micro-Doppler spectrogram
+  7.  Otsu noise floor suppression
 
 Default parameters match the MATLAB example exactly.
 
@@ -134,7 +135,7 @@ def otsu_threshold(spec):
     mask = spec_db >= best_thresh
     return spec * mask
 
-def compute_spectrogram(radar, apply_threshold=False, **kwargs):
+def compute_spectrogram(radar, **kwargs):
     """
     Full pipeline: raw IQ -> micro-Doppler spectrogram.
 
@@ -238,8 +239,7 @@ def compute_spectrogram(radar, apply_threshold=False, **kwargs):
     n_segs = spec.shape[1]
     t_axis = np.linspace(0, nc / PRF, n_segs)
 
-  # -- 7. Otsu noise floor suppression (optional) ----------------------------
-    if apply_threshold:
-        spec = otsu_threshold(spec)
+    # 7. Otsu noise floor suppression
+    spec = otsu_threshold(spec)
 
     return spec, d_axis, t_axis
