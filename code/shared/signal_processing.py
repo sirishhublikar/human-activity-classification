@@ -103,8 +103,38 @@ def preprocess_iq(data):
 
     return iq_correction(i_raw, q_raw)
 
+def otsu_threshold(spec):
+    """
+    Suppress the noise floor using Otsu's method.
+    Operates in dB scale to find the threshold, then zeros out
+    all pixels below it in linear scale.
+    Implemented with numpy only -- no skimage dependency.
+    """
+    spec_db = 20 * np.log10(spec + 1e-10)
 
-def compute_spectrogram(radar, **kwargs):
+    # Otsu's method: find threshold that minimises intra-class variance
+    pixel_counts, bin_edges = np.histogram(spec_db.ravel(), bins=256)
+    bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2
+    total       = pixel_counts.sum()
+    probs       = pixel_counts / total
+
+    best_thresh, best_var = 0, -1
+    for t_idx in range(1, len(bin_centres)):
+        w0 = probs[:t_idx].sum()
+        w1 = probs[t_idx:].sum()
+        if w0 == 0 or w1 == 0:
+            continue
+        mu0 = (probs[:t_idx] * bin_centres[:t_idx]).sum() / w0
+        mu1 = (probs[t_idx:] * bin_centres[t_idx:]).sum() / w1
+        var_between = w0 * w1 * (mu0 - mu1) ** 2
+        if var_between > best_var:
+            best_var    = var_between
+            best_thresh = bin_centres[t_idx]
+
+    mask = spec_db >= best_thresh
+    return spec * mask
+
+def compute_spectrogram(radar, apply_threshold=False, **kwargs):
     """
     Full pipeline: raw IQ -> micro-Doppler spectrogram.
 
@@ -207,5 +237,9 @@ def compute_spectrogram(radar, **kwargs):
 
     n_segs = spec.shape[1]
     t_axis = np.linspace(0, nc / PRF, n_segs)
+
+  # -- 7. Otsu noise floor suppression (optional) ----------------------------
+    if apply_threshold:
+        spec = otsu_threshold(spec)
 
     return spec, d_axis, t_axis
