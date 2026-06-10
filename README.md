@@ -94,6 +94,6 @@ Optuna tunes hyperparameters over 50 trials; final model is saved to `trained_mo
 python code/ensemble/ensemble.py
 Loads all four saved models, re-evaluates on the canonical test split, and outputs uniform soft vote, weighted soft vote, and hard majority vote results with confusion matrices.
 
-**5. Two-stage hierarchical classifier **
+**5. Two-stage hierarchical classifier**
 python code/ensemble/two_stage_classifier.py
 Uses DCNN as Stage 1 and trains a binary SVM/KNN specialist for pick_up vs drink_water as Stage 2.
