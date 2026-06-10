@@ -1,0 +1,14 @@
+==================================================
+  ENSEMBLE SUMMARY
+==================================================
+  Individual models:
+    SVM     0.8588
+    KNN     0.8501
+    RF      0.8617
+    DCNN    0.8934
+
+  Ensemble strategies:
+    Uniform  soft vote   0.8818
+    Weighted soft vote   0.8847
+    Hard majority vote   0.8790
+==================================================

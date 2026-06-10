@@ -1,16 +1,12 @@
 """
-preprocess_all.py  —  shared preprocessing script
+preprocess_all.py 
 ===================================================
-Runs the full signal processing pipeline on every .dat file and saves
-results to preprocessed/ so both pipelines (classical ML and DCNN) load
-the same data.
-
-Uses multiprocessing to run on all CPU cores — expect 5-20 min
-depending on hardware (vs 1-2 hrs single-threaded).
+Runs the full signal processing pipeline on every .dat file and saves the results to preprocessed
+Uses multiprocessing to run on all CPU cores 
 
 Output files in --out_dir:
   spectrograms.npy   object array  (N,)  each entry float32 (800, T_i)
-                     T_i varies per recording — ragged array
+                     T_i varies per recording - ragged array
   t_axes.npy         object array  (N,)  each entry float64 (T_i,)
   labels.npy         int8          (N,)  activity class 1-6
   persons.npy        int16         (N,)  subject ID  (for subject-independent split)
@@ -38,12 +34,14 @@ Loading in classical ML notebook:
 """
 
 import argparse
+from multiprocessing import pool
 import sys
 import time
 import numpy as np
 from pathlib import Path
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 
 sys.path.insert(0, str(Path(__file__).parent))
 from data_loader       import load_dat_file, parse_filename, ACTIVITY_MAP
@@ -53,15 +51,6 @@ from signal_processing import compute_spectrogram
 # ── Worker function (runs in separate process) ────────────────────────────
 
 def _process_file(filepath):
-    """
-    Load one .dat file, run the full signal processing pipeline.
-    Returns (spec float32, t_axis float64, label, person, repetition, filepath_str)
-    or raises on error.
-
-    spec shape is (800, T_i) where T_i depends on recording length.
-    No resizing — raw shape is preserved so downstream code can use
-    t_axis correctly (e.g. for spectrogram tiling in DCNN pipeline).
-    """
     fp    = Path(filepath)
     meta  = parse_filename(fp.name)
     radar = load_dat_file(fp)
@@ -104,8 +93,8 @@ def main(data_dir='../../data', out_dir='../../preprocessed',
     t0 = time.time()
 
     with ProcessPoolExecutor(max_workers=n_workers) as pool:
-        futures = {pool.submit(_process_file, str(fp)): fp
-                   for fp in dat_files}
+        worker = partial(_process_file)
+        futures = {pool.submit(worker, str(fp)): fp for fp in dat_files}
 
         for future in as_completed(futures):
             fp = futures[future]
@@ -136,9 +125,6 @@ def main(data_dir='../../data', out_dir='../../preprocessed',
                       flush=True)
 
     # ── Stack and save ────────────────────────────────────────────────────
-    # Spectrograms are ragged (variable T_i per recording) so saved as
-    # object arrays. Classical ML and DCNN pipelines both load these and
-    # handle them per-recording in their own loops.
     specs_arr  = np.empty(len(specs_list),  dtype=object)
     t_axes_arr = np.empty(len(t_axes_list), dtype=object)
     for i, (s, t) in enumerate(zip(specs_list, t_axes_list)):
@@ -183,5 +169,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_dir',  default='../../preprocessed')
     parser.add_argument('--workers',  type=int, default=None,
                         help='Number of CPU cores (default: all)')
+
     args = parser.parse_args()
     main(args.data_dir, args.out_dir, args.workers)

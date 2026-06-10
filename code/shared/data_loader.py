@@ -1,15 +1,14 @@
 """
-data_loader.py  —  shared utility
-==================================
+data_loader.py  
 Loads raw Ancortek .dat radar files and parses KPXXAYYRZ filenames.
 
 File format (INSHEP project, University of Glasgow):
   Stored as ASCII text, one value per line.
-  Line 1 : fc       carrier frequency  (5.8e9 Hz)    — plain float
-  Line 2 : Tsweep   chirp duration     (1 ms)         — plain float
-  Line 3 : NTS      samples per chirp  (128)           — plain float
-  Line 4 : Bw       bandwidth          (400e6 Hz)     — plain float
-  Line 5+: complex IQ samples as MATLAB format        — e.g. '1812+1897i'
+  Line 1 : fc       carrier frequency  (5.8e9 Hz)    - plain float
+  Line 2 : Tsweep   chirp duration     (1 ms)        - plain float
+  Line 3 : NTS      samples per chirp  (128)         - plain float
+  Line 4 : Bw       bandwidth          (400e6 Hz)    - plain float
+  Line 5+: complex IQ samples as MATLAB format       - e.g. '1812+1897i'
             Real part  = I channel (in-phase)
             Imag part  = Q channel (quadrature)
 
@@ -45,13 +44,6 @@ ACTIVITY_MAP = {
 # ── Public API ────────────────────────────────────────────────────────────
 
 def parse_filename(filename):
-    """
-    Extract person, activity, repetition from a .dat filename.
-    Handles both 'KPXXAYYRZ.dat' and 'PXXAYYRZ.dat' formats.
-
-    Returns dict: person (int), activity (int),
-                  repetition (int), activity_name (str)
-    """
     stem = Path(filename).stem.upper()
     m = re.search(r'P(\d+)A(\d+)R(\d+)', stem)
     if not m:
@@ -63,19 +55,6 @@ def parse_filename(filename):
 
 
 def load_dat_file(filepath):
-    """
-    Load a single .dat radar file.
-
-    Returns dict:
-      fc           float   carrier frequency (Hz)         5.8e9
-      Tsweep       float   chirp duration (s)             0.001
-      NTS          int     samples per chirp              128
-      Bw           float   bandwidth (Hz)                 400e6
-      fs           float   ADC sampling rate (Hz)
-      nc           int     number of chirps
-      record_length float  total recording duration (s)
-      data         ndarray complex128, shape (NTS * nc,)
-    """
     raw = _fast_load(Path(filepath))
 
     # Header: first 4 values are always real
@@ -93,12 +72,6 @@ def load_dat_file(filepath):
 
 
 def load_dataset(data_dir, verbose=True):
-    """
-    Recursively load every .dat file under data_dir.
-
-    Returns list of dicts — each has all parse_filename() and
-    load_dat_file() keys, plus 'filepath' (str).
-    """
     data_dir  = Path(data_dir)
     dat_files = sorted(data_dir.rglob('*.dat'))
     if not dat_files:
@@ -127,17 +100,6 @@ def load_dataset(data_dir, verbose=True):
 # ── Private helpers ────────────────────────────────────────────────────────
 
 def _fast_load(filepath):
-    """
-    Load ASCII .dat file containing MATLAB-format complex IQ samples.
-
-    The data lines look like '1812+1897i' or '1812-1897i'.
-    Header lines are plain floats like '5800000000.0'.
-
-    Strategy:
-      1. Open in text mode  → Python handles \\r\\n on Windows automatically
-      2. Replace MATLAB 'i' suffix with Python 'j'  (one fast C-level pass)
-      3. np.array(..., dtype=complex)  converts all tokens in C — fast
-    """
     with open(filepath, 'r', errors='replace') as f:
         content = f.read()
 
@@ -148,7 +110,7 @@ def _fast_load(filepath):
 
     if len(tokens) < 5:
         raise ValueError(
-            f"Only {len(tokens)} values in {filepath.name} — "
+            f"Only {len(tokens)} values in {filepath.name} - "
             f"file may be empty or corrupt."
         )
 

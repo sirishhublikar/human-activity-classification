@@ -1,4 +1,4 @@
 data/*
 !data/.gitkeep
 preprocessed/*
-!preprocessed/.gitkeep
+!preprocessed/.gitkeep__pycache__/ 
