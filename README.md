@@ -73,27 +73,27 @@ DCNN training requires a CUDA-capable GPU. Inference runs on CPU if no GPU is av
 
 ## Usage
 
-**1. Preprocess all raw `.dat` files (run once)**
+**1. Preprocess all raw `.dat` files (run once)** <br/>
 python code/shared/preprocess_all.py --data_dir data --out_dir preprocessed
 
 Reads every `.dat` file under `data/`, runs the full signal processing pipeline, and writes `spectrograms.npy`, `labels.npy`, `persons.npy` to `preprocessed/`. 
 Uses all CPU cores by default; limit with `--workers N`.
 
-**2. Train classical ML classifiers**
-python code/mathew/svm_classifier.py --features both
-python code/mathew/knn_classifier.py --features both
-python code/sirish/rf_classifier.py --features both
+**2. Train classical ML classifiers** <br/>
+python code/mathew/svm_classifier.py --features both <br/>
+python code/mathew/knn_classifier.py --features both <br/>
+python code/sirish/rf_classifier.py --features both <br/>
 
 Each script runs GridSearchCV (5-fold stratified CV), evaluates on the held-out test set, saves the trained model to `trained_models/`, and writes confusion matrices to `results/confusion_matrices/`. The `--features pca` flag switches to PCA features; `--features both` runs both and compares.
 
-**3. Train DCNN**
+**3. Train DCNN** <br/>
 Open and run `code/sirish/dcnn.ipynb`. 
 Optuna tunes hyperparameters over 50 trials; final model is saved to `trained_models/dcnn_final_model.pth`.
 
-**4. Run ensemble**
-python code/ensemble/ensemble.py
+**4. Run ensemble** <br/>
+python code/ensemble/ensemble.py <br/>
 Loads all four saved models, re-evaluates on the canonical test split, and outputs uniform soft vote, weighted soft vote, and hard majority vote results with confusion matrices.
 
-**5. Two-stage hierarchical classifier**
-python code/ensemble/two_stage_classifier.py
+**5. Two-stage hierarchical classifier** <br/>
+python code/ensemble/two_stage_classifier.py <br/>
 Uses DCNN as Stage 1 and trains a binary SVM/KNN specialist for pick_up vs drink_water as Stage 2.
