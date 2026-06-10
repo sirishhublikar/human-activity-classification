@@ -67,9 +67,10 @@ All models evaluated on a shared subject-independent test split (20% of subjects
 ---
 
 ## Installation
-Run: pip install --upgrade -r code/shared/requirements.txt
+<small>
+pip install --upgrade -r code/shared/requirements.txt <br/>
 DCNN training requires a CUDA-capable GPU. Inference runs on CPU if no GPU is available.
----
+</small>
 
 ## Usage
 
