@@ -1,23 +1,6 @@
-"""
-knn_classifier.py  —  code/mathew/
-=====================================
-Full KNN classification pipeline — mirrors svm_classifier.py exactly
-so you can directly compare both methods.
+# knn_classifier.py
+# KNN classification pipeline
 
-  1. Load preprocessed spectrograms from  preprocessed/
-  2. Extract features  (hand-crafted or PCA)
-  3. Subject-independent train/test split
-  4. Standardise features  (important for distance-based KNN)
-  5. GridSearchCV over k, distance metric, and weighting
-  6. Train final model, evaluate on held-out test set
-  7. Save model to  trained_models/
-  8. Save confusion matrix + feature importance to  results/
-
-Usage:
-  python code/mathew/knn_classifier.py
-  python code/mathew/knn_classifier.py --features pca
-  python code/mathew/knn_classifier.py --features both
-"""
 
 import argparse
 import sys
@@ -44,9 +27,10 @@ RESULTS_CM   = ROOT / 'results' / 'confusion_matrices'
 RESULTS_FI   = ROOT / 'results' / 'feature_importance'
 MODELS       = ROOT / 'trained_models'
 
-sys.path.insert(0, str(ROOT / 'code' / 'mathew'))
+sys.path.insert(0, str(ROOT / 'code' / 'shared'))
 from feature_extraction import (extract_all, build_pca_features,
                                  get_feature_names)
+from utils import subject_split as _canonical_split
 
 # ── class labels ──────────────────────────────────────────────────────────
 CLASS_NAMES = {1: 'walking', 2: 'sitting', 3: 'standing',
@@ -55,31 +39,22 @@ CLASS_NAMES = {1: 'walking', 2: 'sitting', 3: 'standing',
 
 # ── helpers ───────────────────────────────────────────────────────────────
 
+
+def subject_split(X, y, persons, test_frac=0.2, seed=42):
+    train_mask, test_mask = _canonical_split(persons, test_frac, seed)
+    print(f"\nSplit:  train={train_mask.sum()}  |  test={test_mask.sum()}")
+    return X[train_mask], X[test_mask], y[train_mask], y[test_mask]
+
 def load_data():
     print("Loading preprocessed data …")
-    specs   = np.load(PREPROCESSED / 'spectrograms.npy')
-    labels  = np.load(PREPROCESSED / 'labels.npy')
-    persons = np.load(PREPROCESSED / 'persons.npy')
+    specs   = np.load(PREPROCESSED / 'spectrograms.npy', allow_pickle=True)  # object array (N,), each (800, T_i)
+    labels  = np.load(PREPROCESSED / 'labels.npy')                           # (N,)
+    persons = np.load(PREPROCESSED / 'persons.npy')                          # (N,)
     print(f"  {len(specs)} samples  |  "
           f"classes: {np.unique(labels)}  |  "
           f"subjects: {len(np.unique(persons))}")
     return specs, labels, persons
 
-
-def subject_split(X, y, persons, test_frac=0.2, seed=42):
-    """Subject-independent split — identical to svm_classifier.py."""
-    rng         = np.random.default_rng(seed)
-    unique_subs = np.unique(persons)
-    shuffled    = rng.permutation(unique_subs)
-    n_test      = max(1, int(len(shuffled) * test_frac))
-    test_subs   = set(shuffled[:n_test])
-
-    test_mask  = np.array([p in test_subs  for p in persons])
-    train_mask = ~test_mask
-
-    print(f"\nSplit:  train={train_mask.sum()}  |  test={test_mask.sum()}")
-    return (X[train_mask], X[test_mask],
-            y[train_mask], y[test_mask])
 
 
 def plot_confusion_matrix(cm, title, save_path):
@@ -95,10 +70,6 @@ def plot_confusion_matrix(cm, title, save_path):
 
 
 def plot_k_sensitivity(cv_results, save_path):
-    """
-    Plot mean CV accuracy vs k for each metric.
-    Useful for the report — shows how sensitive KNN is to k.
-    """
     params  = cv_results['params']
     scores  = cv_results['mean_test_score']
 
@@ -144,8 +115,6 @@ def run_knn(X_tr, X_te, y_tr, y_te, tag='handcrafted'):
     MODELS.mkdir(parents=True, exist_ok=True)
 
     # ── Pipeline: scaler + KNN ────────────────────────────────────────
-    # Scaling is CRITICAL for KNN — without it, features with large
-    # magnitude dominate the distance calculation
     pipe = Pipeline([
         ('scaler', StandardScaler()),
         ('knn',    KNeighborsClassifier(n_jobs=-1)),
@@ -226,12 +195,9 @@ def main(feature_mode='handcrafted'):
 
     if feature_mode in ('pca', 'both'):
         print("\nExtracting PCA features …")
-        rng    = np.random.default_rng(42)
-        unique = rng.permutation(np.unique(persons))
-        n_test = max(1, int(len(unique) * 0.2))
-        test_s = set(unique[:n_test])
-        tr_idx = np.array([i for i, p in enumerate(persons) if p not in test_s])
-        te_idx = np.array([i for i, p in enumerate(persons) if p in test_s])
+        train_mask, test_mask = _canonical_split(persons)
+        tr_idx = np.where(train_mask)[0]
+        te_idx = np.where(test_mask)[0]
 
         # Reuse PCA fitted by SVM if available, else fit new
         pca_path = MODELS / 'pca_transform.pkl'

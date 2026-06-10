@@ -1,19 +1,10 @@
 """
-feature_extraction.py  —  code/mathew/
-=======================================
-Extracts feature vectors from micro-Doppler spectrograms for SVM and KNN.
+feature_extraction.py 
+Extract feature vectors from micro-Doppler spectrograms for classical ML.
 
-Two approaches are provided:
+Two approaches:
   1. Hand-crafted features  (~20 values, physically interpretable)
   2. PCA features           (data-driven, good baseline comparison)
-
-Hand-crafted features are better for the report (shows radar understanding).
-PCA features are faster to implement and often match or beat hand-crafted.
-Running both and comparing is easy extra content for the 1-pager.
-
-The Doppler axis is reconstructed from known radar parameters:
-  fc = 5.8 GHz,  PRF = 1000 Hz,  nfft = 800
-  velocity range ≈ ±12.9 m/s,  resolution ≈ 0.032 m/s
 
 Usage:
   from feature_extraction import extract_all, build_pca_features, D_AXIS
@@ -32,10 +23,8 @@ _PRF   = 1000.0         # pulse repetition frequency = 1/Tsweep (Hz)
 _NFFT  = 800            # STFT zero-padded length
 _LAM   = 3e8 / _FC      # wavelength (m)
 
-# Velocity axis in m/s — matches the flipud'd spectrogram row order
-# Row 0 = highest positive velocity, Row 399 ≈ 0, Row 799 = most negative
 _freq_axis = np.fft.fftshift(np.fft.fftfreq(_NFFT)) * _PRF   # Hz
-D_AXIS     = (_freq_axis * _LAM / 2)[::-1]                    # m/s, flipped
+D_AXIS     = (_freq_axis * _LAM / 2)[::-1]                   # m/s, flipped
 
 # Zero-Doppler row index
 _ZERO_IDX = np.argmin(np.abs(D_AXIS))   # ≈ 399
@@ -53,7 +42,7 @@ def extract_all(spectrograms):
 
     Returns
     -------
-    X : ndarray, shape (N, n_features)  — float32
+    X : ndarray, shape (N, n_features)  - float32
     """
     return np.stack(
         [extract_one(spectrograms[i]) for i in range(len(spectrograms))],
@@ -222,7 +211,7 @@ def build_pca_features(spectrograms, n_components=64, pca=None):
 
 
 def get_feature_names():
-    """Return names for each hand-crafted feature (for inspection/plots)."""
+    # Return names for each hand-crafted feature
     return [
         'log_total_energy', 'log_pos_energy', 'log_neg_energy', 'pos_neg_ratio',
         'centroid_mean', 'centroid_std', 'centroid_max', 'centroid_min', 'centroid_range',

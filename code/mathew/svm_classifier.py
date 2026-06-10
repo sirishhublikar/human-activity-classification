@@ -1,21 +1,5 @@
-"""
-svm_classifier.py  —  code/mathew/
-=====================================
-Full SVM classification pipeline:
-  1. Load preprocessed spectrograms from  preprocessed/
-  2. Extract hand-crafted features  (and optionally PCA features)
-  3. Subject-independent train/test split
-  4. Standardise features
-  5. GridSearchCV to find best SVM hyperparameters
-  6. Train final model, evaluate on held-out test set
-  7. Save model to  trained_models/
-  8. Save confusion matrix + results to  results/
-
-Usage:
-  python code/mathew/svm_classifier.py
-  python code/mathew/svm_classifier.py --features pca   # use PCA instead
-  python code/mathew/svm_classifier.py --features both  # run both, compare
-"""
+# svm_classifier.py
+# SVM classification pipeline
 
 import argparse
 import sys
@@ -39,8 +23,9 @@ PREPROCESSED = ROOT / 'preprocessed'
 RESULTS      = ROOT / 'results' / 'confusion_matrices'
 MODELS       = ROOT / 'trained_models'
 
-sys.path.insert(0, str(ROOT / 'code' / 'mathew'))
+sys.path.insert(0, str(ROOT / 'code' / 'shared'))
 from feature_extraction import extract_all, build_pca_features, get_feature_names
+from utils import subject_split as _canonical_split
 
 # ── class labels ──────────────────────────────────────────────────────────
 CLASS_NAMES = {1: 'walking', 2: 'sitting', 3: 'standing',
@@ -49,46 +34,25 @@ CLASS_NAMES = {1: 'walking', 2: 'sitting', 3: 'standing',
 
 # ── helpers ───────────────────────────────────────────────────────────────
 
+
+def subject_split(X, y, persons, test_frac=0.2, seed=42):
+    train_mask, test_mask = _canonical_split(persons, test_frac, seed)
+    print(f"\nSplit:  train={train_mask.sum()}  |  test={test_mask.sum()}")
+    return X[train_mask], X[test_mask], y[train_mask], y[test_mask]
+
 def load_data():
-    """Load spectrograms + labels + person IDs from preprocessed/."""
     print("Loading preprocessed data …")
-    specs   = np.load(PREPROCESSED / 'spectrograms.npy')   # (N, 800, 500)
-    labels  = np.load(PREPROCESSED / 'labels.npy')         # (N,)
-    persons = np.load(PREPROCESSED / 'persons.npy')        # (N,)
+    specs   = np.load(PREPROCESSED / 'spectrograms.npy', allow_pickle=True)  # object array (N,), each (800, T_i)
+    labels  = np.load(PREPROCESSED / 'labels.npy')                           # (N,)
+    persons = np.load(PREPROCESSED / 'persons.npy')                          # (N,)
     print(f"  Loaded {len(specs)} samples  "
           f"classes: {np.unique(labels)}  "
           f"subjects: {len(np.unique(persons))}")
     return specs, labels, persons
 
 
-def subject_split(X, y, persons, test_frac=0.2, seed=42):
-    """
-    Split by subject — no subject appears in both train and test.
-    This is the correct evaluation strategy to avoid data leakage.
-
-    Holds out test_frac of all subjects; keeps remainder for training.
-    Subjects are sorted then split deterministically (seed for shuffle).
-    """
-    rng           = np.random.default_rng(seed)
-    unique_subs   = np.unique(persons)
-    shuffled      = rng.permutation(unique_subs)
-    n_test        = max(1, int(len(shuffled) * test_frac))
-    test_subs     = set(shuffled[:n_test])
-
-    test_mask  = np.array([p in test_subs  for p in persons])
-    train_mask = ~test_mask
-
-    print(f"\nSplit:  train={train_mask.sum()} samples "
-          f"({len(unique_subs) - n_test} subjects)  |  "
-          f"test={test_mask.sum()} samples ({n_test} subjects)")
-    print(f"  Test subjects: {sorted(test_subs)}")
-
-    return (X[train_mask], X[test_mask],
-            y[train_mask], y[test_mask])
-
 
 def plot_confusion_matrix(cm, title, save_path):
-    """Save confusion matrix as a PNG."""
     labels = [CLASS_NAMES[c] for c in sorted(CLASS_NAMES)]
     fig, ax = plt.subplots(figsize=(8, 7))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm,
@@ -102,13 +66,7 @@ def plot_confusion_matrix(cm, title, save_path):
 
 
 def run_svm(X_tr, X_te, y_tr, y_te, tag='handcrafted'):
-    """
-    Train SVM with GridSearchCV and evaluate on test set.
-
-    Parameters
-    ----------
-    tag : str   label used for filenames  ('handcrafted' or 'pca')
-    """
+    # Train SVM with GridSearchCV and evaluate on test set
     RESULTS.mkdir(parents=True, exist_ok=True)
     MODELS.mkdir(parents=True,  exist_ok=True)
 
@@ -119,8 +77,6 @@ def run_svm(X_tr, X_te, y_tr, y_te, tag='handcrafted'):
     ])
 
     # ── Hyperparameter grid ───────────────────────────────────────────
-    # RBF kernel is almost always best for spectral features
-    # Poly kernel included for comparison
     param_grid = [
         {
             'svm__kernel': ['rbf'],
@@ -198,12 +154,9 @@ def main(feature_mode='handcrafted'):
         print("\nExtracting PCA features …")
         # Fit PCA on training split only to avoid leakage
         # Quick subject split for indices
-        rng    = np.random.default_rng(42)
-        unique = rng.permutation(np.unique(persons))
-        n_test = max(1, int(len(unique) * 0.2))
-        test_s = set(unique[:n_test])
-        tr_idx = np.array([i for i, p in enumerate(persons) if p not in test_s])
-        te_idx = np.array([i for i, p in enumerate(persons) if p in test_s])
+        train_mask, test_mask = _canonical_split(persons)
+        tr_idx = np.where(train_mask)[0]
+        te_idx = np.where(test_mask)[0]
 
         X_pca_tr, fitted_pca = build_pca_features(
             specs[tr_idx], n_components=64, pca=None

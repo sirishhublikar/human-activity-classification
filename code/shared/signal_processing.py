@@ -19,23 +19,13 @@ Default parameters match the MATLAB example exactly.
 Usage:
   from signal_processing import compute_spectrogram
   spec, d_axis, t_axis = compute_spectrogram(radar_dict)
-
-  # Quick visualisation
-  import matplotlib.pyplot as plt
-  plt.imshow(20*np.log10(spec + 1e-10),
-             aspect='auto', origin='upper',
-             extent=[t_axis[0], t_axis[-1], d_axis[-1], d_axis[0]])
-  plt.xlabel('Time (s)')
-  plt.ylabel('Velocity (m/s)')
-  plt.colorbar(label='dB')
-  plt.show()
 """
 
 import numpy as np
 from scipy.signal import butter, lfilter, stft as _scipy_stft
 
 
-# -- Default parameters (match MATLAB DataProcessingExample.m) ----------------
+# -- Default parameters ----------------
 
 DEFAULT_PARAMS = dict(
     time_window    = 200,    # STFT window length in chirps
@@ -51,15 +41,6 @@ DEFAULT_PARAMS = dict(
 def iq_correction(i_raw, q_raw):
     """
     IQ imbalance correction via Gram-Schmidt orthogonalisation.
-
-    Corrects two hardware impairments present in the raw ADC output:
-      - Phase imbalance: I and Q channels are not perfectly 90 deg apart
-      - Amplitude imbalance: I and Q channels have different gains
-
-    Steps:
-      1. Estimate phase imbalance  phi = arcsin(corr(I_norm, Q_norm))
-      2. Estimate amplitude imbalance  a = std(Q) / std(I)
-      3. Correct Q: Q_corr = (Q - I*sin(phi)) / (a*cos(phi))
 
     Parameters
     ----------
@@ -81,11 +62,6 @@ def iq_correction(i_raw, q_raw):
 
 def preprocess_iq(data):
     """
-    Mean removal and IQ imbalance correction on the raw flat IQ array.
-
-    Must be called BEFORE reshaping into the chirp matrix so that
-    the correction statistics are computed over the full recording.
-
     Parameters
     ----------
     data : ndarray complex128, shape (NTS * nc,)
@@ -137,16 +113,6 @@ def otsu_threshold(spec):
 
 def compute_spectrogram(radar, **kwargs):
     """
-    Full pipeline: raw IQ -> micro-Doppler spectrogram.
-
-    Pipeline stages (mirrors DataProcessingExample.m):
-      1. IQ correction + mean removal  (preprocess_iq)
-      2. Reshape into chirp matrix  [NTS x nc]
-      3. Range FFT  (rectangular window, fftshift, keep positive half)
-      4. MTI high-pass Butterworth filter  (order 4, Wn=0.0075)
-      5. Remove DC range bin
-      6. STFT summed over range bins -> micro-Doppler spectrogram
-
     Parameters
     ----------
     radar  : dict  output of data_loader.load_dat_file()
@@ -172,20 +138,17 @@ def compute_spectrogram(radar, **kwargs):
     data_corr = preprocess_iq(data)
 
     # -- 2. Reshape into chirp matrix ------------------------------------------
-    # MATLAB: reshape(Data, [NTS nc])  uses column-major order
     nc        = int(len(data_corr) / NTS)
     Data_time = data_corr[:NTS * nc].reshape(NTS, nc, order='F')   # [NTS x nc]
 
     # -- 3. Range FFT ----------------------------------------------------------
     # Rectangular window (ones) applied implicitly; FFT along fast-time axis
-    # fftshift centres DC at row NTS//2
     tmp        = np.fft.fftshift(np.fft.fft(Data_time, axis=0), axes=0)
-    # Keep positive range bins only  (matches MATLAB: tmp(NTS/2+1:NTS,:))
-    Data_range = tmp[NTS // 2:, :]                                 # [NTS//2 x nc]
+    # Keep positive range bins only 
+    Data_range = tmp[NTS // 2:, :]  # [NTS//2 x nc]
 
     # -- 4. MTI filter ---------------------------------------------------------
-    # Process all chirps (no clamping needed -- scipy lfilter has no even-length
-    # restriction unlike MATLAB's filter())
+    # Process all chirps 
     b, a = butter(4, 0.0075, btype='high')
 
     Data_range_MTI = np.zeros_like(Data_range)
@@ -193,16 +156,12 @@ def compute_spectrogram(radar, **kwargs):
         Data_range_MTI[k] = lfilter(b, a, Data_range[k, :])
 
     # -- 5. Remove DC range bin ------------------------------------------------
-    # MATLAB: Data_range_MTI(2:end,:)  -- row 0 is DC, discard it
-    Data_range_MTI = Data_range_MTI[1:, :]                         # [NTS//2-1 x nc]
+    Data_range_MTI = Data_range_MTI[1:, :]  # [NTS//2-1 x nc]
 
     # -- 6. STFT -> micro-Doppler spectrogram ----------------------------------
     tw   = p['time_window']                          # 200
     ov   = int(round(tw * p['overlap_factor']))      # 190
     nfft = p['pad_factor'] * tw                      # 800
-
-    # Convert 1-indexed MATLAB bin numbers -> 0-indexed Python
-    # DC bin was removed, so MATLAB bin 10 -> Python index 9
     bl = p['bin_indl'] - 1                           # 9
     bu = p['bin_indu'] - 1                           # 29
 
@@ -210,7 +169,7 @@ def compute_spectrogram(radar, **kwargs):
     for rb in range(bl, min(bu + 1, Data_range_MTI.shape[0])):
         sig = Data_range_MTI[rb, :]
 
-        # scipy stft (window='hamming' matches MATLAB spectrogram default)
+        # scipy stft
         _, _, Zxx = _scipy_stft(
             sig,
             window          = 'hamming',
@@ -219,13 +178,13 @@ def compute_spectrogram(radar, **kwargs):
             nfft            = nfft,
             return_onesided = False,   # full two-sided spectrum (complex IQ)
         )
-        # fftshift along frequency axis (matches MATLAB fftshift(...,1))
+        # fftshift along frequency axis
         Zxx_shifted = np.fft.fftshift(Zxx, axes=0)
 
         mag  = np.abs(Zxx_shifted)
         spec = mag if spec is None else spec + mag
 
-    # flipud matches MATLAB display convention (positive Doppler at top)
+    # flipud
     spec = np.flipud(spec)
 
     # -- Build axes ------------------------------------------------------------
